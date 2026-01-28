@@ -14,9 +14,9 @@ Ce document rassemble **la formulation mathématique complète** du projet de *U
 ### 1.2 Variables de décision
 
 * $p_{i,t} \ge 0$ : puissance produite (MW)
-* $u_{i,t} \in {0,1}$ : état ON/OFF
+* $u_{i,t} \in \\{0,1\\}$ : état ON/OFF
 * $y_{i,t} \in \\{0,1\\}$ : démarrage
-* $z_{i,t} \in \{0,1\}$ : arrêt
+* $z_{i,t} \in \\{0,1\\}$ : arrêt
 
 ### 1.3 Fonction objectif (partie thermique)
 
