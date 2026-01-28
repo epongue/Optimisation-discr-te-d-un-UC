@@ -8,15 +8,15 @@ Ce document rassemble **la formulation mathématique complète** du projet de *U
 
 ### 1.1 Indices
 
-* \(i \in \mathcal{I}\) : centrales thermiques
-* \(t = 1,\dots,T\) : pas de temps (durée \(\Delta t\) en heures)
+* $i \in \mathcal{I}$ : centrales thermiques
+* $t = 1,\dots,T$ : pas de temps (durée \(\Delta t\) en heures)
 
 ### 1.2 Variables de décision
 
-* $\(p_{i,t} \ge 0\)$ : puissance produite (MW)
-* $\(u_{i,t} \in \{0,1\}\)$ : état ON/OFF
-* $\(y_{i,t} \in \{0,1\}\)$ : démarrage
-* $\(z_{i,t} \in \{0,1\}\)$ : arrêt
+* $p_{i,t} \ge 0$ : puissance produite (MW)
+* $u_{i,t} \in \{0,1\}$ : état ON/OFF
+* $y_{i,t} \in \{0,1\}$ : démarrage
+* $\(z_{i,t} \in \{0,1\}$ : arrêt
 
 ### 1.3 Fonction objectif (partie thermique)
 
