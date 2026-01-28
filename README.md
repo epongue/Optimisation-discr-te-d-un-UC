@@ -66,16 +66,16 @@ $$
 
 ### 2.1 Structure du système
 
-* Réservoirs : \(r \in \mathcal{R}\)
-* Arcs (turbines/pompes) : \(a \in \mathcal{A}\)
+* Réservoirs : $r \in \mathcal{R}$
+* Arcs (turbines/pompes) : $a \in \mathcal{A}$
 
 Chaque arc relie un réservoir amont à un réservoir aval.
 
 ### 2.2 Variables de décision
 
-* \(f_{a,t}\) : débit (m³/s)
-* \(p^H_{a,t}\) : puissance hydraulique (MW)
-* \(V_{r,t}\) : volume du réservoir (m³)
+* $f_{a,t}$ : débit (m³/s)
+* $p^H_{a,t}$ : puissance hydraulique (MW)
+* $V_{r,t}$ : volume du réservoir (m³)
 
 ### 2.3 Contraintes sur les débits
 
@@ -93,7 +93,7 @@ $$
 
 ### 2.4 Dynamique des volumes (bilan matière)
 
-Pour chaque réservoir \(r\) :
+Pour chaque réservoir $r$ :
 
 $$
 V_{r,t} = V_{r,t-1} + \Delta t \left( I_{r,t} + \sum_{a \in \text{in}(r)} f_{a,t} - \sum_{a \in \text{out}(r)} f_{a,t} \right)
@@ -131,7 +131,7 @@ $$
 
 ### 3.1 Variable de déficit (optionnelle)
 
-* \(s_t \ge 0\) : déficit de puissance (MW)
+* $s_t \ge 0$ : déficit de puissance (MW)
 
 ### 3.2 Fonction objectif complète
 
@@ -141,7 +141,7 @@ $$
 
 ### 3.3 Contrainte de satisfaction de la demande
 
-Pour chaque pas de temps \(t\) :
+Pour chaque pas de temps $t$ :
 
 $$
 \sum_{i \in \mathcal{I}} p_{i,t} + \sum_{a \in \mathcal{A}} p^H_{a,t} + s_t \ge d_t
