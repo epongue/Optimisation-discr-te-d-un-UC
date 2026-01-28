@@ -9,7 +9,7 @@ Ce document rassemble **la formulation mathématique complète** du projet de *U
 ### 1.1 Indices
 
 * $i \in \mathcal{I}$ : centrales thermiques
-* $t = 1,\dots,T$ : pas de temps (durée \(\Delta t\) en heures)
+* $t = 1,\dots,T$ : pas de temps (durée $\Delta t$ en heures)
 
 ### 1.2 Variables de décision
 
