@@ -136,7 +136,7 @@ $$
 ### 3.2 Fonction objectif complète
 
 $$
-\min \sum_{i,t} \left( c_{i,t}, p_{i,t}, \Delta t + s_i, y_{i,t} \right) + M \sum_t s_t
+\min \sum_{i,t} \left( c_{i,t}\times p_{i,t}\times \Delta t + s_i \times y_{i,t} \right) + M \sum_t s_t
 $$
 
 ### 3.3 Contrainte de satisfaction de la demande
