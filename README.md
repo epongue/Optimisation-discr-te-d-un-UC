@@ -271,8 +271,7 @@ Le fichier [`Formulation_du_probleme.md`](Formulation_du_probleme.md) contient l
 ### Documents de référence
 
 * [`Project_statement.pdf`](Project_statement.pdf) : Énoncé original du projet
-* [`CORRECTIONS_APPLIQUEES.md`](CORRECTIONS_APPLIQUEES.md) : Résumé complet des corrections apportées (conformité formulation ↔ code)
-* [`ERRATA_FORMULATION.md`](ERRATA_FORMULATION.md) : Corrections détaillées de la formulation mathématique
+* Cours d'optimisation discrète
 
 ### Conformité formulation ↔ code
 
@@ -334,3 +333,4 @@ Pour toute question sur :
 * Les corrections apportées → consulter `CORRECTIONS_APPLIQUEES.md`
 * L'implémentation → voir les commentaires dans les fichiers `src/model/*.py`
 * Les données → voir `src/io/netcdf_reader.py`
+
