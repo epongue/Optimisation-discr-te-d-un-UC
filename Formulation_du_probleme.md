@@ -49,7 +49,7 @@ $$
 **Bornes de puissance**
 
 $$
-p^{\min}\_{i,t} u_{i,t} \le p\_{i,t} \le p^{\max}_{i,t} u\_{i,t}
+p^{\min}_{i,t} u_{i,t} \le p_{i,t} \le p^{\max}_{i,t} u_{i,t}
 $$
 
 **Contraintes de ramping**
@@ -64,7 +64,7 @@ $$
 p_{i,t-1} - p_{i,t} \le g^{\downarrow}_i \Delta t + M(1 - u_{i,t}) + M \times z_{i,t} \quad \forall i,t
 $$
 
-où $M$ est un BigM choisi suffisamment grand (typiquement $M = p^{\max}_{i,t} + p^{\max}_{i,t-1}$).
+où $M$ est un BigM choisi suffisamment grand (typiquement $M = p^{\max}_{i,t} + p^{\max}\_{i,t-1}$).
 
 **Interprétation :**
 - Les termes $M(1 - u_{i,t-1})$ et $M(1 - u_{i,t})$ relaxent les contraintes quand l'unité est éteinte
@@ -264,6 +264,7 @@ Le domaine de faisabilité $\mathcal{X}$ est défini par l'ensemble des contrain
 **Pénalité de déficit :**
 
 - Le coefficient $M$ dans la fonction objectif doit être suffisamment grand pour que le déficit soit utilisé uniquement en dernier recours (typiquement $M \gg \max_i c_i$)
+
 
 
 
