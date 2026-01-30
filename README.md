@@ -1,239 +1,148 @@
-# 📘 Unit Commitment thermique + hydro (Pyomo / Gurobi)
+# Projet Unit Commitment – Formulation mathématique 
 
-Ce projet implémente un **problème d’Unit Commitment (UC)** avec :
-
-* unités **thermiques** (ON/OFF, rampes, min up/down, coûts),
-* un **système hydro multi-réservoirs** avec arcs, volumes, rampes et PWL,
-* un **équilibrage offre–demande** avec slack pénalisé,
-* résolution via **Pyomo + Gurobi**,
-* post-traitement (CSV, plots, sanity checks).
+Ce document rassemble **la formulation mathématique complète** du projet de *Unit Commitment (UC)* avant toute implémentation Python. Il constitue le socle théorique (MILP) sur lequel reposera ensuite le code et la résolution numérique.
 
 ---
 
-## 📁 Structure du projet
+## Étape 1 — Modélisation des centrales thermiques
 
-```
-uc_project/
-│
-├── Formulation_du_probleme.md
-├── README.md
-│
-└── resolution_et_implementation/
-    ├── main.py
-    ├── requirements.txt
-    │
-    ├── data/
-    │   ├── raw/            # fichiers .nc4 (entrée)
-    │   └── cured/
-    │
-    ├── outputs/
-    │   ├── models/         # modèles LP (debug)
-    │   ├── solutions/      # CSV / JSON résultats
-    │   └── plots/          # figures
-    │
-    └── src/
-        ├── config.py
-        ├── io/
-        │   ├── netcdf_reader.py
-        │   └── curing.py
-        ├── model/
-        │   ├── thermal.py
-        │   ├── hydro.py
-        │   ├── system.py
-        │   └── build.py
-        └── post/
-            ├── extract.py
-            ├── plots.py
-            └── report.py
-```
+### 1.1 Indices
 
----
+* $i \in \mathcal{I}$ : centrales thermiques
+* $t = 1,\dots,T$ : pas de temps (durée $\Delta t$ en heures)
 
-## ⚙️ Prérequis
+### 1.2 Variables de décision
 
-### 1️⃣ Python
+* $p_{i,t} \ge 0$ : puissance produite (MW)
+* $u_{i,t} \in \\{0,1\\}$ : état ON/OFF
+* $y_{i,t} \in \\{0,1\\}$ : démarrage
+* $z_{i,t} \in \\{0,1\\}$ : arrêt
 
-* Python **3.9 ou plus récent** recommandé
+### 1.3 Fonction objectif (partie thermique)
 
-### 2️⃣ Solver
+$$
+\min \sum_{i,t} \left( c_{i,t}, p_{i,t}, \Delta t + s_i, y_{i,t} \right)
+$$
 
-* **Gurobi** (obligatoire)
+### 1.4 Contraintes
 
-  * Licence académique acceptée
-  * `gurobi_cl` doit être accessible dans le PATH
+**Bornes de puissance**
 
-### 3️⃣ Dépendances Python
+$$
+p^{\min}_{i,t} u_{i,t} \le p_{i,t} \le p^{\max}_{i,t} u_{i,t}
+$$
 
-Créer un environnement virtuel (recommandé) :
+**Contraintes de ramping**
 
-```bash
-python -m venv .opti
-source .opti/bin/activate      # Linux / Mac
-.opti\Scripts\activate         # Windows
-```
+$$
+p_{i,t} - p_{i,t-1} \le g_i \Delta t
+$$
 
-Installer les dépendances :
+$$
+p_{i,t-1} - p_{i,t} \le g_i \Delta t
+$$
 
-```bash
-pip install -r requirements.txt
-```
+**Lien logique ON/OFF – démarrage – arrêt**
 
-Dépendances principales :
+$$
+u_{i,t} - u_{i,t-1} = y_{i,t} - z_{i,t}
+$$
 
-* `pyomo`
-* `numpy`
-* `pandas`
-* `matplotlib`
-* `netCDF4`
+**Temps minimum de fonctionnement (Min Up)**
+
+$$
+\sum_{k=t}^{t+\tau_i^+-1} u_{i,k} \ge \tau_i^+, y_{i,t}
+$$
+
+**Temps minimum d’arrêt (Min Down)**
+
+$$
+\sum_{k=t}^{t+\tau_i^--1} (1-u_{i,k}) \ge \tau_i^-, z_{i,t}
+$$
 
 ---
 
-## 📥 Données d’entrée
+## Étape 2 — Modélisation des systèmes hydrauliques en cascade
 
-Les données sont fournies sous forme **NetCDF (.nc4)**.
+### 2.1 Structure du système
 
-### Emplacement attendu
+* Réservoirs : $r \in \mathcal{R}$
+* Arcs (turbines/pompes) : $a \in \mathcal{A}$
 
-```
-resolution_et_implementation/data/raw/
-```
+Chaque arc relie un réservoir amont à un réservoir aval.
 
-### Exemple utilisé
+### 2.2 Variables de décision
 
-```
-20090907_pHydro_1_none.nc4
-```
+* $f_{a,t}$ : débit (m³/s)
+* $p^H_{a,t}$ : puissance hydraulique (MW)
+* $V_{r,t}$ : volume du réservoir (m³)
 
-Le dataset doit contenir :
+### 2.3 Contraintes sur les débits
 
-* un **bloc thermique** (UnitBlock_i),
-* un **bloc hydro** de type `HydroUnitBlock`,
-* un **horizon commun** (ex. 96 pas de 15 minutes).
+**Bornes**
 
-⚠️ Le pas de temps doit être cohérent avec `dt_hours` dans `main.py`.
+$$
+f_a^{\min} \le f_{a,t} \le f_a^{\max}
+$$
 
----
+**Ramping hydraulique**
 
-## ▶️ Lancer le modèle
+$$
+|f_{a,t} - f_{a,t-1}| \le g_a \Delta t
+$$
 
-Depuis la racine du projet :
+### 2.4 Dynamique des volumes (bilan matière)
 
-```bash
-python resolution_et_implementation/main.py
-```
+Pour chaque réservoir $r$ :
 
----
+$$
+V_{r,t} = V_{r,t-1} + \Delta t \left( I_{r,t} + \sum_{a \in \text{in}(r)} f_{a,t} - \sum_{a \in \text{out}(r)} f_{a,t} \right)
+$$
 
-## 🧮 Ce que fait le script `main.py`
+**Bornes sur les volumes**
 
-1. Charge les données NetCDF
-2. Construit le modèle UC (thermique + hydro)
-3. Exporte le modèle LP (debug)
-4. Résout le MIQP avec Gurobi
-5. Extrait les résultats :
+$$
+V_r^{\min} \le V_{r,t} \le V_r^{\max}
+$$
 
-   * production thermique
-   * production hydro
-   * slack
-6. Génère :
+### 2.5 Conversion débit → puissance
 
-   * fichiers CSV
-   * résumé JSON
-   * graphiques
-   * sanity checks
+**Pompe (linéaire)**
 
----
+$$
+p^H_{a,t} = \rho_a f_{a,t}
+$$
 
-## 📤 Résultats générés
+**Turbine (fonction concave piecewise linéaire)**
 
-### 📄 CSV / JSON
+$$
+p(f) = \min_{j \in \mathcal{J}_a} \left( p_{a,j} + \rho_{a,j}(f - f_{a,j}) \right)
+$$
 
-Dans :
+Reformulation MILP :
 
-```
-outputs/solutions/
-```
-
-* `thermal_units.csv`
-* `system.csv`
-* `summary.json`
-* (optionnel) `hydro_arcs.csv`, `hydro_reservoirs.csv`
-
-### 📊 Graphiques
-
-Dans :
-
-```
-outputs/plots/
-```
-
-* équilibre système (demande / offre)
-* marge offre–demande
-* dispatch thermique
-* heatmap UC (u)
+$$
+p^H_{a,t} \le p_{a,j} + \rho_{a,j}(f_{a,t} - f_{a,j}) \quad \forall j \in \mathcal{J}_a
+$$
 
 ---
 
-## ✅ Sanity checks automatiques
+## Étape 3 — Problème de Unit Commitment global
 
-Le script vérifie notamment :
+### 3.1 Variable de déficit (optionnelle)
 
-* satisfaction de la demande,
-* cohérence p = 0 si u = 0,
-* usage du slack,
-* activité hydro.
+* $s_t \ge 0$ : déficit de puissance (MW)
 
-Exemple :
+### 3.2 Fonction objectif complète
 
-```json
-{
-  "demand_violations": 0,
-  "p_positive_when_off": 0,
-  "slack_used_steps": 0,
-  "hydro_nonzero_steps": 96
-}
-```
+$$
+\min \sum_{i,t} \left( c_{i,t}\times p_{i,t}\times \Delta t + s_i \times y_{i,t} \right) + M \sum_t s_t
+$$
 
----
+### 3.3 Contrainte de satisfaction de la demande
 
-## 💧 Remarque importante sur l’hydro
+Pour chaque pas de temps $t$ :
 
-Dans la formulation actuelle :
-
-* l’hydro **n’a pas de coût ni valeur de l’eau**,
-* il peut donc être **peu ou pas utilisé** si le thermique suffit.
-
-👉 C’est un **choix de modélisation**, pas un bug.
-
-Pour un hydro réaliste, il est recommandé d’ajouter :
-
-* une **valeur de l’eau**,
-* ou une **contrainte de volume terminal**.
-
----
-
-## 🧪 Debug & diagnostic
-
-* Le modèle LP est exporté dans :
-
-  ```
-  outputs/models/uc_model.lp
-  ```
-* Utile pour :
-
-  * diagnostiquer une infaisabilité,
-  * inspecter les contraintes hydro / UC.
-
----
-
-## 🧠 Auteur & contexte
-
-Projet académique – **Optimisation discrète / Unit Commitment**
-Implémentation Pyomo inspirée des formulations industrielles (UC + hydro multi-réservoirs).
-
-
----
-
-## Conclusion
-
-Cette formulation constitue la base théorique sur laquelle l’implémentation Python (Pyomo/PuLP), l’export LP/MPS et la résolution par solveur seront construits.
+$$
+\sum_{i \in \mathcal{I}} p_{i,t} + \sum_{a \in \mathcal{A}} p^H_{a,t} + s_t \ge d_t
+$$
