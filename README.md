@@ -17,8 +17,6 @@ uc_project/
 │
 ├── Project_statement.pdf           # Énoncé du projet
 ├── Formulation_du_probleme.md      # Formulation mathématique complète (MILP)
-├── CORRECTIONS_APPLIQUEES.md       # Documentation des corrections apportées
-├── ERRATA_FORMULATION.md           # Corrections détaillées de la formulation
 ├── README.md                       # Ce fichier
 │
 └── resolution_et_implementation/
@@ -59,7 +57,7 @@ uc_project/
 
 ### 1️⃣ Python
 
-* Python **3.9 ou plus récent** recommandé
+* Python **3.11 ou plus récent** recommandé
 
 ### 2️⃣ Solver
 
