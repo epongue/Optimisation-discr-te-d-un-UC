@@ -18,7 +18,7 @@ Ce document rassemble **la formulation mathématique complète** du projet de *U
 * $c^{\text{quad}}_{i,t}$ : coût variable quadratique (€/MW²h)
 * $s^{\text{start}}_i$ : coût de démarrage (€)
 * $s^{\text{stop}}_i$ : coût d'arrêt (€)
-* $p^{min}_{i,t}$, $p^{max}_{i,t}$ : bornes de puissance (MW)
+* $p^{min}_{i,t}, {i,t}$ : bornes de puissance (MW)
 * $g^{\uparrow}_i, g^{\downarrow}_i$ : gradients maximaux montée/descente (MW/h)
 * $\tau_i^+$ : temps minimum de fonctionnement (nombre de pas de temps)
 * $\tau_i^-$ : temps minimum d'arrêt (nombre de pas de temps)
@@ -264,4 +264,5 @@ Le domaine de faisabilité $\mathcal{X}$ est défini par l'ensemble des contrain
 **Pénalité de déficit :**
 
 - Le coefficient $M$ dans la fonction objectif doit être suffisamment grand pour que le déficit soit utilisé uniquement en dernier recours (typiquement $M \gg \max_i c_i$)
+
 
