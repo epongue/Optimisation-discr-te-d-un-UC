@@ -49,7 +49,7 @@ $$
 **Bornes de puissance**
 
 $$
-p^{\min}_{i,t} u_{i,t} \le p_{i,t} \le p^{\max}_{i,t} u_{i,t}
+p^{\min}\_{i,t} u_{i,t} \le p\_{i,t} \le p^{\max}_{i,t} u\_{i,t}
 $$
 
 **Contraintes de ramping**
@@ -264,6 +264,7 @@ Le domaine de faisabilité $\mathcal{X}$ est défini par l'ensemble des contrain
 **Pénalité de déficit :**
 
 - Le coefficient $M$ dans la fonction objectif doit être suffisamment grand pour que le déficit soit utilisé uniquement en dernier recours (typiquement $M \gg \max_i c_i$)
+
 
 
 
