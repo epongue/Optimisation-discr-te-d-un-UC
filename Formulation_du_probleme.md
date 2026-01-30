@@ -200,7 +200,7 @@ $$
 
 ### 3.1 Variable de déficit (optionnelle)
 
-* $s_t \ge 0$ : déficit de puissance (MW)
+* $s_t \ge 0$ : déficit de puissance/slack (MW)
 
 ### 3.2 Fonction objectif complète
 
@@ -244,7 +244,7 @@ $$
 * $p^H_{a,t} \in \mathbb{R}$ : puissance hydraulique
 
 **Variable de déficit** :
-* $s_t \in \mathbb{R}_+$ : déficit de puissance
+* $s_t \in \mathbb{R}_+$ : déficit de puissance / slack
 
 ### 4.2 Domaine de faisabilité complet
 
@@ -264,6 +264,7 @@ Le domaine de faisabilité $\mathcal{X}$ est défini par l'ensemble des contrain
 **Pénalité de déficit :**
 
 - Le coefficient $M$ dans la fonction objectif doit être suffisamment grand pour que le déficit soit utilisé uniquement en dernier recours (typiquement $M \gg \max_i c_i$)
+
 
 
 
