@@ -264,7 +264,8 @@ Le domaine de faisabilité $\mathcal{X}$ est défini par l'ensemble des contrain
 
 **Pénalité de déficit :**
 
-- Le coefficient $M$ dans la fonction objectif doit être suffisamment grand pour que le déficit soit utilisé uniquement en dernier recours (typiquement $M \gg \max_i c_i$)
+- Le coefficient $M$ dans la fonction objectif doit être suffisamment grand pour que le déficit soit utilisé uniquement en dernier recours (typiquement $M \gg \max_i c_i$). Le solveur n’utilisera le slack que si c’est impossible autrement.
+
 
 
 
