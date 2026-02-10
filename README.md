@@ -1,336 +1,192 @@
-# 📘 Unit Commitment thermique + hydro (Pyomo / Gurobi)
+# PGE 306 - Projet en Optimisation : Session 2
 
-Ce projet implémente un **problème d'Unit Commitment (UC)** avec :
+## Optimisation d'un systeme electrique avec energies renouvelables et stockage
 
-* unités **thermiques** (ON/OFF, rampes, min up/down, coûts),
-* un **système hydro multi-réservoirs** avec arcs, volumes, rampes et PWL,
-* un **équilibrage offre–demande** avec slack pénalisé,
-* résolution via **Pyomo + Gurobi**,
-* post-traitement (CSV, plots, sanity checks).
+Projet realise dans le cadre du cours PGE 306 (ENSTA Paris). L'objectif est de dimensionner et piloter de maniere optimale un systeme electrique combinant production renouvelable (solaire, eolien), stockage (batteries, hydrogene) et import reseau, en minimisant le cout total (investissement + exploitation).
 
 ---
 
-## 📁 Structure du projet
+## Structure du projet
 
 ```
-uc_project/
-│
-├── Project_statement.pdf           # Énoncé du projet
-├── Formulation_du_probleme.md      # Formulation mathématique complète (MILP)
-├── README.md                       # Ce fichier
-│
-└── resolution_et_implementation/
-    ├── main.py                     # Point d'entrée
-    ├── requirements.txt            # Dépendances Python
-    │
-    ├── data/
-    │   ├── raw/                    # Fichiers .nc4 (entrée)
-    │   └── cured/
-    │
-    ├── outputs/
-    │   ├── models/                 # Modèles LP exportés (debug)
-    │   ├── solutions/              # CSV / JSON résultats
-    │   └── plots/                  # Figures générées
-    │
-    └── src/
-        ├── config.py               # Configuration globale
-        ├── io/
-        │   ├── netcdf_reader.py    # Lecture données NetCDF
-        │   └── curing.py           # Structures de données
-        ├── model/
-        │   ├── thermal.py          # Contraintes thermiques
-        │   ├── hydro.py            # Contraintes hydrauliques
-        │   ├── system.py           # Contrainte de demande
-        │   └── build.py            # Construction modèle complet
-        ├── solve/
-        │   ├── solver.py
-        │   └── export.py
-        └── post/
-            ├── extract.py          # Extraction solution
-            ├── plots.py            # Génération graphiques
-            └── report.py           # Sanity checks
+Session_2/
+├── main.py                              # Optimisation sur 12h (cas test)
+├── requirements.txt                     # Dependances Python
+├── README.md
+├── comparaison_configurations.csv       # Resultats comparatifs (5 configurations)
+├── resultats_systeme_complet.csv        # Resultats horaires detailles
+├── resultats_systeme.png                # Visualisation du systeme complet
+├── .projopti2/                          # Environnement virtuel Python
+└── Cas_Allemagne/                       # Etude de cas Allemagne (2016-2018)
+    ├── run.py                           # Script principal
+    ├── preparation_data_Germany.py      # Chargement et nettoyage des donnees
+    ├── optimsation_Germany_annual.py    # Solveur d'optimisation annuelle
+    ├── time_series_60min_singleindex.csv# Donnees brutes OPSD (8760h x 3 ans)
+    └── outputs/                         # Resultats generes
+        ├── germany_YYYY.csv             # Donnees nettoyees par annee
+        ├── results_germany_YYYY.csv     # Resultats d'optimisation par annee
+        ├── germany_YYYY_analysis.png    # Visualisations par annee
+        └── comparison_2016_2018.csv     # Comparaison inter-annuelle
 ```
 
 ---
 
-## ⚙️ Prérequis
+## Modele d'optimisation
 
-### 1️⃣ Python
+### Composants du systeme
 
-* Python **3.11 ou plus récent** recommandé
+| Composant | Description | Parametres cles |
+|---|---|---|
+| **Solaire PV** | Production proportionnelle au facteur de capacite `f_s(t)` | CAPEX : 0.137 kEUR/MW |
+| **Eolien** | Production proportionnelle au facteur de capacite `f_e(t)` | CAPEX : 0.1096 kEUR/MW |
+| **Batterie** | Stockage court terme, rendement 95%, auto-decharge 0.01%/h | CAPEX : 0.1174 kEUR/MWh + 0.274 kEUR/MW |
+| **Hydrogene** | Stockage long terme, rendement 70%, auto-decharge 0.001%/h | CAPEX : 0.0639 kEUR/MWh + 0.1826 kEUR/MW |
+| **Import reseau** | Electricite achetee sur le reseau | 10 kEUR/MWh (12h) / 0.1 kEUR/MWh (annuel) |
 
-### 2️⃣ Solver
+### Variables de decision
 
-* **Gurobi** (obligatoire)
-  * Licence académique acceptée
-  * `gurobi_cl` doit être accessible dans le PATH
+- **Dimensionnement** : Capacites solaire (`CAP_s`), eolien (`CAP_e`), batterie (`CAP_B`, `P_B`), hydrogene (`CAP_H`, `P_H`)
+- **Exploitation** (par pas de temps) : Import `I(t)`, delestage `K(t)`, charge/decharge batterie `C_B(t)`/`Z_B(t)`, charge/decharge H2 `C_H(t)`/`Z_H(t)`
 
-### 3️⃣ Dépendances Python
+### Fonction objectif
 
-Créer un environnement virtuel (recommandé) :
-
-```bash
-python -m venv .opti
-source .opti/bin/activate      # Linux / Mac
-.opti\Scripts\activate         # Windows
+```
+Minimiser : Cout_imports + CAPEX_production + CAPEX_stockage
 ```
 
-Installer les dépendances :
+### Contraintes principales
+
+1. **Equilibre energetique** (chaque heure) :
+   ```
+   Solaire + Eolien + Import + Decharge_batterie + Decharge_H2
+   = Demande + Delestage + Charge_batterie + Charge_H2
+   ```
+
+2. **Dynamique du stockage** :
+   ```
+   S_B(t+1) = (1 - delta_B) * S_B(t) + eta_B * C_B(t) - Z_B(t)
+   S_H(t+1) = (1 - delta_H) * S_H(t) + eta_H * C_H(t) - Z_H(t)
+   ```
+
+3. **Limites de capacite** : Niveaux de stockage et puissances bornes par les capacites installees
+
+---
+
+## Deux cas d'etude
+
+### 1. Cas test 12 heures (`main.py`)
+
+Optimisation sur un profil de demande synthetique de 12 heures. Compare **5 configurations** :
+
+| Configuration | Cout total | Imports |
+|---|---|---|
+| Solaire + Batteries | 147.27 kEUR | 0% |
+| Eolien + Batteries | 108.64 kEUR | 0% |
+| Solaire + Eolien + Batteries | 80.35 kEUR | 0% |
+| Solaire + Eolien + Hydrogene | 71.09 kEUR | 0% |
+| **Systeme complet** | **71.09 kEUR** | **0%** |
+
+### 2. Cas Allemagne 2016-2018 (`Cas_Allemagne/`)
+
+Optimisation annuelle (8760 heures) basee sur les donnees reelles du systeme electrique allemand (source : [Open Power System Data](https://data.open-power-system-data.org/)).
+
+| Annee | Cout total | CAP solaire | CAP eolien | CAP H2 | Autosuffisance |
+|---|---|---|---|---|---|
+| 2016 | 127.8 Mrd kEUR | 205 816 MW | 725 908 MW | 647 910 MWh | 99.7% |
+| 2017 | 156.1 Mrd kEUR | 149 785 MW | 972 624 MW | 542 406 MWh | 99.3% |
+| 2018 | 125.8 Mrd kEUR | 160 420 MW | 787 225 MW | 743 462 MWh | 99.9% |
+
+**Resultats cles** : Le stockage hydrogene est systematiquement prefere aux batteries pour un horizon annuel (stockage saisonnier). L'autosuffisance depasse 99% dans tous les cas.
+
+---
+
+## Installation
+
+### Prerequis
+
+- Python 3.10+
+- **Gurobi** avec licence valide (licence academique disponible sur [gurobi.com](https://www.gurobi.com/academia/academic-program-and-licenses/))
+
+### Mise en place
 
 ```bash
-cd resolution_et_implementation
+# Cloner ou telecharger le projet
+cd Session_2
+
+# Creer et activer l'environnement virtuel
+python -m venv .projopti2
+# Windows
+.projopti2\Scripts\activate.bat
+# Linux/macOS
+source .projopti2/bin/activate
+
+# Installer les dependances
 pip install -r requirements.txt
 ```
 
-Dépendances principales :
-
-* `pyomo~=6.7`
-* `numpy~=1.24`
-* `pandas~=2.0`
-* `matplotlib~=3.8`
-* `netCDF4~=1.6`
-* `gurobipy`
-
 ---
 
-## 📥 Données d'entrée
+## Utilisation
 
-Les données sont fournies sous forme **NetCDF (.nc4)**.
-
-### Emplacement attendu
-
-```
-resolution_et_implementation/data/raw/Hydro/
-```
-
-### Exemple utilisé
-
-```
-20090907_pHydro_18_none.nc4
-```
-
-(Configuré dans `main.py` ligne 28)
-
-Le dataset doit contenir :
-
-* des **blocs thermiques** (UnitBlock_i de type ThermalUnitBlock),
-* un **bloc hydro** de type `HydroUnitBlock`,
-* un **horizon commun** (ex. 96 pas de 15 minutes).
-
-⚠️ Le pas de temps doit être cohérent avec `dt_hours` dans `main.py` (ligne 33).
-
----
-
-## ▶️ Lancer le modèle
-
-Depuis la racine du projet :
+### Cas test 12 heures
 
 ```bash
-cd resolution_et_implementation
 python main.py
 ```
 
----
+**Sorties** :
+- `comparaison_configurations.csv` : tableau comparatif des 5 configurations
+- `resultats_systeme_complet.csv` : resultats horaires du systeme optimal
+- `resultats_systeme.png` : visualisation (6 sous-graphiques)
 
-## 🧮 Ce que fait le script `main.py`
+### Cas Allemagne
 
-1. **Charge les données** NetCDF (thermiques + hydro + demande)
-2. **Construit le modèle UC** (thermique + hydro + contrainte de demande)
-3. **Exporte le modèle** LP pour debug (`outputs/models/uc_model.lp`)
-4. **Résout le MILP/MIQP** avec Gurobi
-5. **Extrait les résultats** :
-   * Production thermique (p, u, y, z pour chaque unité)
-   * Production hydro (débits, puissance, volumes)
-   * Équilibre système (demande, offre, slack)
-6. **Génère les outputs** :
-   * Fichiers CSV (thermal_units.csv, system.csv, hydro_arcs.csv, etc.)
-   * Résumé JSON (summary.json)
-   * Graphiques (dispatch, équilibre, heatmap UC)
-   * Sanity checks automatiques
-
----
-
-## 📤 Résultats générés
-
-### 📄 CSV / JSON
-
-Dans `outputs/solutions/` :
-
-* **`thermal_units.csv`** : production, état ON/OFF, démarrages/arrêts pour chaque unité
-* **`system.csv`** : équilibre offre-demande à chaque pas de temps
-* **`summary.json`** : résumé global (objectif, statistiques, métriques)
-* **`hydro_arcs.csv`** : débits et puissance de chaque arc hydraulique
-* **`hydro_reservoirs.csv`** : volumes des réservoirs dans le temps
-
-### 📊 Graphiques
-
-Dans `outputs/plots/` :
-
-* Équilibre système (demande vs offre totale)
-* Marge offre–demande
-* Dispatch thermique (stacked area)
-* Heatmap UC (état ON/OFF des unités thermiques)
-
----
-
-## ✅ Sanity checks automatiques
-
-Le script vérifie automatiquement :
-
-* **Satisfaction de la demande** : aucune violation
-* **Cohérence p = 0 si u = 0** : aucune production si unité éteinte
-* **Usage du slack** : déficit utilisé seulement en dernier recours
-* **Activité hydro** : nombre de pas où l'hydro produit
-
-Exemple de sortie :
-
-```json
-{
-  "demand_violations": 0,
-  "p_positive_when_off": 0,
-  "slack_used_steps": 0,
-  "hydro_nonzero_steps": 96
-}
+```bash
+cd Cas_Allemagne
+python run.py
 ```
 
----
+**Sorties** (dans `outputs/`) :
+- `germany_YYYY.csv` : donnees nettoyees
+- `results_germany_YYYY.csv` : resultats d'optimisation detailles
+- `germany_YYYY_analysis.png` : visualisations (7 sous-graphiques)
+- `comparison_2016_2018.csv` : comparaison inter-annuelle
 
-## 💧 Remarques importantes sur l'hydro
-
-### Utilisation de l'hydraulique
-
-Dans le dataset `20090907_pHydro_18_none.nc4` :
-
-* **Nombre d'arcs hydrauliques** : 6
-* **Capacité hydro totale** : ~480 MW (somme des pmax)
-* **Demande moyenne** : ~43 600 MW
-* **Part hydro** : ~0.6% de la demande totale
-
-**L'hydraulique fonctionne à 100% de sa capacité** sur la plupart des arcs car :
-* L'eau est gratuite (coût = 0 dans la fonction objectif)
-* Le solveur privilégie naturellement l'hydro avant le thermique
-* Les contraintes de volumes et rampes sont respectées
-
-### Modélisation
-
-* **Coût de production hydro** : 0 € (eau gratuite)
-* **Turbines** : fonction concave piecewise linéaire (PWL)
-* **Pas de pompes** dans ce dataset (turbines uniquement)
-* **Contraintes** : volumes min/max, rampes de débit, bilan matière
-
-Pour un modèle plus réaliste, on pourrait ajouter :
-* Une **valeur de l'eau** (coût d'opportunité)
-* Des **contraintes de volume terminal** (gestion de stock inter-journalière)
+> **Note** : Le fichier de donnees brutes `time_series_60min_singleindex.csv` (~230 Mo) doit etre present dans `Cas_Allemagne/`. Il est telecharge automatiquement par le script ou disponible sur [OPSD](https://data.open-power-system-data.org/time_series/).
 
 ---
 
-## 🧪 Debug & diagnostic
+## Visualisations
 
-### Export LP
+Chaque optimisation genere des graphiques montrant :
 
-Le modèle LP est exporté dans :
-
-```
-outputs/models/uc_model.lp
-```
-
-Utile pour :
-* Diagnostiquer une infaisabilité
-* Inspecter les contraintes hydro / UC
-* Vérifier la formulation MILP
-
-### Fichiers de log
-
-Gurobi génère des logs détaillés lors de la résolution (affichés dans le terminal avec `tee=True`).
+1. Production vs demande (diagramme empile)
+2. Sources de satisfaction de la demande (renouvelable / batterie / H2 / import)
+3. Etat de charge de la batterie
+4. Etat de charge du stockage hydrogene
+5. Flux de charge/decharge batterie
+6. Flux de charge/decharge hydrogene
+7. Delestage d'energie renouvelable (cas Allemagne)
 
 ---
 
-## 📚 Documentation du projet
+## Solveur
 
-### Formulation mathématique
+Le projet utilise **Gurobi** comme solveur de programmation lineaire. Le probleme est formule comme un programme lineaire continu (LP) :
 
-Le fichier [`Formulation_du_probleme.md`](Formulation_du_probleme.md) contient la formulation MILP complète du problème avec :
-
-* **Centrales thermiques** (Étape 1) :
-  * Variables binaires (u, y, z) et continues (p)
-  * Ramping avec termes BigM pour transitions
-  * Contraintes min up/down
-  * Fonction objectif complète (coûts fixe + linéaire + quadratique + démarrage + arrêt)
-
-* **Systèmes hydrauliques** (Étape 2) :
-  * Réservoirs en cascade avec dynamique des volumes
-  * Turbines avec fonction PWL concave
-  * Contraintes de ramping sur débits
-  * Bornes sur volumes, débits et puissance
-
-* **Problème global** (Étape 3) :
-  * Fonction objectif totale (thermique + pénalité déficit)
-  * Contrainte de satisfaction de la demande
-  * Variable de déficit (slack)
-
-### Documents de référence
-
-* [`Project_statement.pdf`](Project_statement.pdf) : Énoncé original du projet
-* Cours d'optimisation discrète
-
-### Conformité formulation ↔ code
-
-✅ **Le code est 100% conforme à la formulation mathématique**
-
-Toutes les divergences initiales ont été corrigées :
-* ✅ Ramping thermique avec termes BigM documentés
-* ✅ Fonction objectif complète (tous les coûts)
-* ✅ Min Up/Down aux bords : utilise `min(t+τ, T)`
-* ✅ Ramping hydraulique en unités absolues (pas de × dt)
-* ✅ Commentaires exhaustifs dans le code
-* ✅ Documentation complète dans les docstrings
+- **Cas 12h** : ~60 variables, ~60 contraintes
+- **Cas annuel** : ~52 560 variables, ~50 000+ contraintes (methode barrier avec presolve)
 
 ---
 
-## 🧠 Auteur & contexte
+## Dependances
 
-**Projet académique – Optimisation discrète / Unit Commitment**
-
-Implémentation Pyomo/Gurobi d'un problème de Unit Commitment thermique + hydraulique, inspirée des formulations industrielles (UC multi-réservoirs).
-
-**Technologies** :
-* Python 3.9+
-* Pyomo (modélisation)
-* Gurobi (résolution MILP/MIQP)
-* NetCDF4 (lecture données)
-* Pandas (manipulation données)
-* Matplotlib (visualisation)
-
-**Caractéristiques** :
-* MILP avec variables binaires (engagement thermique)
-* MIQP si coûts quadratiques présents
-* Gestion de cascades hydrauliques multi-réservoirs
-* Fonctions PWL concaves pour turbines
-* Export LP pour debug
-* Post-traitement complet (CSV, JSON, graphiques)
-* Sanity checks automatiques
-
----
-
-## 🎯 Résultats attendus
-
-Avec le dataset `20090907_pHydro_18_none.nc4` (96 pas de 15 min) :
-
-* **Nombre d'unités thermiques** : ~160
-* **Nombre de réservoirs** : 5
-* **Nombre d'arcs hydrauliques** : 6
-* **Production hydro** : ~250-380 MW (100% de la capacité)
-* **Production thermique** : ~43 300 MW
-* **Déficit** : 0 MW (problème faisable)
-* **Temps de résolution** : variable selon le solveur et les options (typiquement quelques secondes à quelques minutes)
-
----
-
-## 📞 Support
-
-Pour toute question sur :
-* La formulation mathématique → consulter `Formulation_du_probleme.md`
-* Les corrections apportées → consulter `CORRECTIONS_APPLIQUEES.md`
-* L'implémentation → voir les commentaires dans les fichiers `src/model/*.py`
-* Les données → voir `src/io/netcdf_reader.py`
-
+| Paquet | Version | Usage |
+|---|---|---|
+| `gurobipy` | - | Interface Python pour le solveur Gurobi |
+| `pandas` | ~2.0 | Manipulation de donnees |
+| `numpy` | ~1.24 | Calcul numerique |
+| `matplotlib` | ~3.8 | Visualisation |
+| `pyomo` | ~6.7 | Framework de modelisation (optionnel) |
+| `xarray` | ~2024.0 | Tableaux multi-dimensionnels |
+| `netCDF4` | ~1.6 | Format de donnees NetCDF |
